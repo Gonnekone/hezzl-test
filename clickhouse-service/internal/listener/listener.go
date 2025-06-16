@@ -128,7 +128,6 @@ func (l *Listener) listen(ctx context.Context, sub *nats.Subscription) {
 				}
 			}
 
-			// ACK'аем только успешно обработанные сообщения
 			for _, msg := range processedMsgs {
 				if err := msg.Ack(); err != nil {
 					l.log.Warn("Error acknowledging message", sl.Err(err))
@@ -149,7 +148,6 @@ func (l *Listener) processMessage(msg *nats.Msg) (*models.Good, error) {
 	return &good, nil
 }
 
-// Batch processor - обрабатывает накопленные сообщения
 func (l *Listener) batchProcessor(ctx context.Context) {
 	timer := time.NewTimer(l.batchTimer)
 	defer timer.Stop()
