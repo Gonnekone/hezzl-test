@@ -1,0 +1,13 @@
+env: local # dev, prod
+
+storage:
+  host: localhost
+  port: 5432
+  database: some_db
+  user: some_user
+  password: some_password
+
+http_server:
+  address: localhost:8080
+  timeout: 4s
+  idle_timeout: 60s

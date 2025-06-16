@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:latest
+    restart: always
+    container_name: postgres-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: hezzl_admin
+      POSTGRES_PASSWORD: hezzl_password
+      POSTGRES_DB: hezzl
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    container_name: redis-cache
+    restart: always
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--requirepass", "password"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:alpine
+    container_name: nats-server
+    restart: always
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+      - "6222:6222"
+    command: [ "nats-server", "-js", "-sd", "/data", "-m", "8222", "--user", "hezzl_admin", "--pass", "hezzl_password" ]
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8222/healthz" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats-init:
+    image: natsio/nats-box:latest
+    container_name: nats-init
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        echo "Creating NATS stream..."
+
+        nats --server=nats://hezzl_admin:hezzl_password@nats:4222 stream add CLICKHOUSE \
+          --subjects "clickhouse.>" \
+          --storage file \
+          --max-age 24h \
+          --max-msgs 100 \
+          --discard old \
+          --defaults || echo "Stream creation failed"
+
+        echo "Listing streams:"
+        nats --server=nats://hezzl_admin:hezzl_password@nats:4222 stream list || echo "List failed"
+
+        echo "Initialization complete!"
+
+  go:
+    build:
+      context: .
+      target: final
+    container_name: go-app
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    environment:
+      CONFIG_PATH: config/local.yaml
+    command: ["./main", "--config=./config/dev.yaml"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:

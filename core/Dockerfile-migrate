@@ -1,0 +1,16 @@
+FROM golang:alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -o migrator ./cmd/migrator/migrator.go
+
+FROM alpine:latest AS final
+WORKDIR /app
+COPY --from=builder /app/migrator .
+COPY --from=builder /app/config ./config
+COPY --from=builder /app/migrations ./migrations
+RUN echo '#!/bin/sh' > /app/entrypoint.sh && \
+    echo 'exec ./migrator --migrations-path=./migrations --config=./config/dev.yaml --direction="$MIGRATION_DIRECTION"' >> /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,0 +1,9 @@
+/core/.go.sum
+/clickhouse-service/.go.sum
+/core/config/local.yaml
+/core/config/dev.yaml
+/clickhouse-service/config/local.yaml
+/clickhouse-service/config/dev.yaml
+
+.idea
+.DS_Store
