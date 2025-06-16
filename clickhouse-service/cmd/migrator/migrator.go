@@ -3,8 +3,9 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
-	"log"
+	"github.com/Gonnekone/hezzl-test/clickhouse-service/internal/lib/logger/sl"
+	"log/slog"
+	"os"
 	"strings"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
@@ -17,13 +18,16 @@ import (
 func main() {
 	var migrationsPath, direction string
 
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
 	flag.StringVar(&migrationsPath, "migrations-path", "", "path to migrations")
 	flag.StringVar(&direction, "direction", "up", "migration direction (up/down)")
 
 	cfg := config.MustLoad()
 
 	if migrationsPath == "" {
-		log.Fatal("migrations-path is required")
+		log.Error("migrations-path is required")
+		os.Exit(1)
 	}
 
 	if strings.HasPrefix(cfg.ClickHouseStorage.Addr, "clickhouse") {
@@ -33,35 +37,35 @@ func main() {
 
 	clickhouseDSN := cfg.ClickHouseStorage.DSN() + "?x-multi-statement=true"
 
-	fmt.Printf("Connecting to ClickHouse: %s\n", clickhouseDSN)
-	fmt.Printf("Migrations path: file://%s\n", migrationsPath)
+	log.Debug("Connecting to ClickHouse", slog.String("dsn", clickhouseDSN))
 
 	m, err := migrate.New("file://"+migrationsPath, clickhouseDSN)
 	if err != nil {
-		log.Fatalf("Failed to create migrate instance: %v", err)
+		log.Error("failed to create migrate instance", sl.Err(err))
+		os.Exit(1)
 	}
 	defer m.Close()
 
 	switch direction {
 	case "up":
-		fmt.Println("Applying UP migrations...")
 		err = m.Up()
 
 	case "down":
-		fmt.Println("Applying DOWN migrations...")
 		err = m.Down()
 
 	default:
-		log.Fatalf("Invalid direction: %s. Use 'up' or 'down'", direction)
+		log.Error("Invalid direction", slog.String("direction", direction))
+		os.Exit(1)
 	}
 
 	if err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
-			fmt.Println("No changes to apply")
+			log.Info("No changes to apply")
 			return
 		}
-		log.Fatalf("Migration failed: %v", err)
+		log.Error("Migration failed", sl.Err(err))
+		os.Exit(1)
 	}
 
-	fmt.Println("Migrations applied successfully")
+	log.Info("Migrations applied successfully")
 }

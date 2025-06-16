@@ -15,15 +15,21 @@ import (
 	"net/http"
 )
 
+const errCode = 3
+
 //go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLDeleter
 type GoodDeleter interface {
-	DeleteGood(ctx context.Context, id string, projectId string) (*models.Good, error)
+	DeleteGood(
+		ctx context.Context,
+		id string,
+		projectID string,
+	) (*models.Good, error)
 	InvalidList(ctx context.Context) error
 }
 
 type Response struct {
-	Id        int  `json:"id"`
-	ProjectId int  `json:"projectId"`
+	ID        int  `json:"id"`
+	ProjectID int  `json:"projectId"`
 	Removed   bool `json:"removed"`
 }
 
@@ -41,7 +47,7 @@ func New(
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.remove.New"
 
-		log := log.With(
+		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
@@ -56,8 +62,8 @@ func New(
 			return
 		}
 
-		projectId := r.URL.Query().Get("projectId")
-		if projectId == "" {
+		projectID := r.URL.Query().Get("projectId")
+		if projectID == "" {
 			log.Info("projectId is empty")
 
 			render.Status(r, http.StatusNotFound)
@@ -66,13 +72,13 @@ func New(
 			return
 		}
 
-		good, err := goodDeleter.DeleteGood(r.Context(), id, projectId)
+		good, err := goodDeleter.DeleteGood(r.Context(), id, projectID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Error("failed to delete good", sl.Err(err))
 
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, ErrorResponse{
-				Code:    3,
+				Code:    errCode,
 				Msg:     "errors.common.notFound",
 				Details: err.Error(),
 			})
@@ -111,8 +117,8 @@ func New(
 		}
 
 		render.JSON(w, r, Response{
-			Id:        good.ID,
-			ProjectId: good.ProjectID,
+			ID:        good.ID,
+			ProjectID: good.ProjectID,
 			Removed:   good.Removed,
 		})
 	}

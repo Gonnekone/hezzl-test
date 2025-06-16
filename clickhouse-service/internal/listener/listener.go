@@ -25,10 +25,9 @@ type Listener struct {
 	log *slog.Logger
 	cfg config.Nats
 
-	// Для batch обработки
 	goodsBatch []models.Good
 	batchCh    chan models.Good
-	batchTimer *time.Timer
+	batchTimer time.Duration
 }
 
 func New(log *slog.Logger, cfg config.Nats, clh *clickhouse.ClickHouseStorage) (*Listener, error) {
@@ -49,8 +48,9 @@ func New(log *slog.Logger, cfg config.Nats, clh *clickhouse.ClickHouseStorage) (
 		clh:        clh,
 		cfg:        cfg,
 		log:        log,
+		batchTimer: clh.BatchTimer,
 		goodsBatch: make([]models.Good, 0, cfg.BatchSize),
-		batchCh:    make(chan models.Good, cfg.BatchSize*2), // Буфер в 2 раза больше
+		batchCh:    make(chan models.Good, cfg.BatchSize*2), //nolint: mnd
 	}, nil
 }
 
@@ -95,7 +95,7 @@ func (l *Listener) Start(ctx context.Context) error {
 }
 
 func (l *Listener) listen(ctx context.Context, sub *nats.Subscription) {
-	defer sub.Unsubscribe()
+	defer sub.Unsubscribe() //nolint: errcheck
 
 	for {
 		select {
@@ -105,7 +105,7 @@ func (l *Listener) listen(ctx context.Context, sub *nats.Subscription) {
 			l.flushBatch(ctx)
 			return
 		default:
-			msgs, err := sub.Fetch(l.cfg.BatchSize, nats.MaxWait(2*time.Second))
+			msgs, err := sub.Fetch(l.cfg.BatchSize, nats.MaxWait(2*time.Second)) //nolint: mnd
 			if err != nil {
 				if errors.Is(err, nats.ErrTimeout) {
 					continue
@@ -159,8 +159,7 @@ func (l *Listener) processMessage(msg *nats.Msg) (*models.Good, error) {
 
 // Batch processor - обрабатывает накопленные сообщения
 func (l *Listener) batchProcessor(ctx context.Context) {
-	batchTimeout := 30 * time.Second // Таймаут для отправки batch
-	timer := time.NewTimer(batchTimeout)
+	timer := time.NewTimer(l.batchTimer)
 	defer timer.Stop()
 
 	for {
@@ -179,7 +178,7 @@ func (l *Listener) batchProcessor(ctx context.Context) {
 			// Если batch заполнен - отправляем
 			if len(l.goodsBatch) >= l.cfg.BatchSize {
 				l.flushBatch(ctx)
-				timer.Reset(batchTimeout)
+				timer.Reset(l.batchTimer)
 			}
 
 		case <-timer.C:
@@ -187,7 +186,7 @@ func (l *Listener) batchProcessor(ctx context.Context) {
 			if len(l.goodsBatch) > 0 {
 				l.flushBatch(ctx)
 			}
-			timer.Reset(batchTimeout)
+			timer.Reset(l.batchTimer)
 		}
 	}
 }

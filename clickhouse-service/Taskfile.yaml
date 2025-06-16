@@ -22,3 +22,8 @@ tasks:
     cmds:
       - docker build -f ./Dockerfile-migrate -t my-migrate-image . 
         && docker run -e MIGRATION_DIRECTION=down my-migrate-image
+
+  lint:
+    desc: "Lint"
+    cmds:
+      - golangci-lint run -c .golangci.yml ./...

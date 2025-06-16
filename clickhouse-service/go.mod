@@ -3,7 +3,6 @@ module github.com/Gonnekone/hezzl-test/clickhouse-service
 go 1.24.2
 
 require (
-	github.com/ClickHouse/clickhouse-go v1.5.4
 	github.com/ClickHouse/clickhouse-go/v2 v2.36.0
 	github.com/fatih/color v1.18.0
 	github.com/golang-migrate/migrate/v4 v4.18.3
@@ -15,7 +14,6 @@ require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/ClickHouse/ch-go v0.66.0 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
-	github.com/cloudflare/golz4 v0.0.0-20150217214814-ef862a3cdc58 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect

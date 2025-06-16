@@ -17,7 +17,11 @@ const offsetDefault = "1"
 
 //go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
 type GoodLister interface {
-	ListGoods(ctx context.Context, limit int, offset int) (*GoodListResponse, error)
+	ListGoods(
+		ctx context.Context,
+		limit int,
+		offset int,
+	) (*GoodListResponse, error)
 	GetCachedList(ctx context.Context, limit, offset int) ([]byte, error)
 	SaveListInCache(ctx context.Context, list GoodListResponse) error
 }
@@ -38,7 +42,7 @@ func New(log *slog.Logger, goodLister GoodLister) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.list.New"
 
-		log := log.With(
+		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
@@ -58,6 +62,7 @@ func New(log *slog.Logger, goodLister GoodLister) http.HandlerFunc {
 
 			w.Header().Set("Content-Type", "application/json")
 
+			//nolint: errcheck
 			w.Write(data)
 
 			return

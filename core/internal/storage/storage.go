@@ -11,7 +11,10 @@ type Storage struct {
 	*redis.RedisStorage
 }
 
-func New(pCfg config.PostgresStorage, rCfg config.RedisStorage) (*Storage, error) {
+func New(
+	pCfg config.PostgresStorage,
+	rCfg config.RedisStorage,
+) (*Storage, error) {
 	postgresStorage, err := postgres.New(pCfg)
 	if err != nil {
 		return nil, err

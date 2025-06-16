@@ -1,0 +1,168 @@
+version: "2"
+run:
+  concurrency: 4
+linters:
+  default: none
+  enable:
+    - asasalint
+    - bodyclose
+    - containedctx
+    - cyclop
+    - dogsled
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - copyloopvar
+    - forbidigo
+    - gochecknoinits
+    - goconst
+    - err113
+    - mnd
+    - gomoddirectives
+    - goprintffuncname
+    - gosec
+    - govet
+    - grouper
+    - ineffassign
+    - lll
+    - misspell
+    - nilerr
+    - noctx
+    - nonamedreturns
+    - prealloc
+    - predeclared
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    - sloglint
+  settings:
+    cyclop:
+      max-complexity: 15
+    exhaustive:
+      default-signifies-exhaustive: true
+    goconst:
+      match-constant: false
+    gomoddirectives:
+      replace-local: true
+    gosec:
+      excludes:
+        - G115
+      config:
+        G306: "0644"
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+    lll:
+      line-length: 160
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    nonamedreturns:
+      report-error-in-defer: true
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    staticcheck:
+      checks:
+        - -ST1000
+        - -ST1003
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - all
+    usestdlibvars:
+      time-month: true
+      time-layout: true
+      crypto-hash: true
+      default-rpc-path: true
+      tls-signature-scheme: true
+      constant-kind: true
+    sloglint:
+      # Enforce not mixing key-value pairs and attributes.
+      # Default: true
+      no-mixed-args: true
+      # Enforce using key-value pairs only (overrides no-mixed-args, incompatible with attr-only).
+      # Default: false
+      kv-only: false
+      # Enforce using attributes only (overrides no-mixed-args, incompatible with kv-only).
+      # Default: false
+      attr-only: true
+      # Enforce using methods that accept a context.
+      # Default: false
+      context-only: false
+      # Enforce using static values for log messages.
+      # Default: false
+      static-msg: true
+      no-global: default
+      # Enforce using constants instead of raw keys.
+      # Default: false
+      no-raw-keys: false
+      # Enforce a single key naming convention.
+      # Values: snake, kebab, camel, pascal
+      # Default: ""
+      key-naming-case: snake
+      # Enforce putting arguments on separate lines.
+      # Default: false
+      args-on-sep-lines: true
+      forbidden-keys:
+        - time
+        - level
+        - msg
+        - source
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - staticcheck
+        text: 'SA1019:|SA1029:|SA1032:'
+      - linters:
+          - govet
+        text: 'shadow: declaration of "(err|ctx)" shadows declaration at'
+      - linters:
+          - err113
+          - errcheck
+          - funlen
+          - gocyclo
+          - gosec
+          - lll
+          - mnd
+        path: _test\.go
+      - linters:
+          - exhaustive
+          - errcheck
+          - cyclop
+          - funlen
+        path: pkg/liblog/slogpretty
+      - linters:
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - vendor
+      - mocks
+      - api/grpc
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

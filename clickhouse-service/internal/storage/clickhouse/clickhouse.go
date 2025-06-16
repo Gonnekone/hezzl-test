@@ -2,15 +2,18 @@ package clickhouse
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/Gonnekone/hezzl-test/clickhouse-service/internal/config"
 	"github.com/Gonnekone/hezzl-test/clickhouse-service/internal/models"
+	"time"
 )
 
 type ClickHouseStorage struct {
-	db driver.Conn
+	db         driver.Conn
+	BatchTimer time.Duration
 }
 
 func New(cfg config.ClickHouseStorage) (*ClickHouseStorage, error) {
@@ -32,7 +35,7 @@ func New(cfg config.ClickHouseStorage) (*ClickHouseStorage, error) {
 			},
 		},
 		Debugf: func(format string, v ...interface{}) {
-			fmt.Printf(format, v)
+			fmt.Printf(format, v) //nolint: forbidigo
 		},
 	})
 	if err != nil {
@@ -40,8 +43,15 @@ func New(cfg config.ClickHouseStorage) (*ClickHouseStorage, error) {
 	}
 
 	if err := conn.Ping(context.Background()); err != nil {
-		if exception, ok := err.(*clickhouse.Exception); ok {
-			fmt.Printf("Exception [%d] %s \n%s\n", exception.Code, exception.Message, exception.StackTrace)
+		var exception *clickhouse.Exception
+		if errors.As(err, &exception) {
+			//nolint: forbidigo
+			fmt.Printf(
+				"Exception [%d] %s \n%s\n",
+				exception.Code,
+				exception.Message,
+				exception.StackTrace,
+			)
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
@@ -49,7 +59,10 @@ func New(cfg config.ClickHouseStorage) (*ClickHouseStorage, error) {
 	return &ClickHouseStorage{db: conn}, nil
 }
 
-func (s *ClickHouseStorage) LogGoods(ctx context.Context, goods []models.Good) error {
+func (s *ClickHouseStorage) LogGoods(
+	ctx context.Context,
+	goods []models.Good,
+) error {
 	const op = "storage.clickhouse.LogGoods"
 
 	if len(goods) == 0 {

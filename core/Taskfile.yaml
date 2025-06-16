@@ -15,10 +15,15 @@ tasks:
     desc: "Init database"
     cmds:
       - docker build -f ./Dockerfile-migrate -t my-migrate-image .
-        && docker run -e MIGRATION_DIRECTION=up my-migrate-image #--direction=up
+        && docker run -e MIGRATION_DIRECTION=up my-migrate-image
 
   migrate-down:
     desc: "Shutdown database"
     cmds:
       - docker build -f ./Dockerfile-migrate -t my-migrate-image . 
         && docker run -e MIGRATION_DIRECTION=down my-migrate-image
+
+  lint:
+    desc: "Lint"
+    cmds:
+      - golangci-lint run -c .golangci.yml ./...

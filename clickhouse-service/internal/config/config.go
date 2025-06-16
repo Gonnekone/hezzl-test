@@ -31,10 +31,11 @@ type Nats struct {
 }
 
 type ClickHouseStorage struct {
-	Addr     string `yaml:"addr" env-default:"clickhouse"`
-	User     string `yaml:"user" env-default:"hezzl_admin"`
-	Password string `yaml:"password" env-default:"hezzl_password"`
-	DB       string `yaml:"db" env-default:"hezzl"`
+	Addr       string        `yaml:"addr" env-default:"clickhouse"`
+	User       string        `yaml:"user" env-default:"hezzl_admin"`
+	Password   string        `yaml:"password" env-default:"hezzl_password"`
+	DB         string        `yaml:"db" env-default:"hezzl"`
+	BatchTimer time.Duration `yaml:"batch_timer" env-default:"30s"`
 }
 
 func (c *ClickHouseStorage) DSN() string {

@@ -3,7 +3,7 @@ package create
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	resp "github.com/Gonnekone/hezzl-test/core/internal/lib/api/response"
 	"github.com/Gonnekone/hezzl-test/core/internal/lib/logger/sl"
 	"github.com/Gonnekone/hezzl-test/core/internal/models"
@@ -17,7 +17,11 @@ import (
 
 //go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
 type GoodSaver interface {
-	SaveGood(ctx context.Context, name string, projectId string) (*models.Good, error)
+	SaveGood(
+		ctx context.Context,
+		name string,
+		projectID string,
+	) (*models.Good, error)
 	InvalidList(ctx context.Context) error
 }
 
@@ -33,7 +37,7 @@ func New(
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.create.New"
 
-		log := log.With(
+		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
@@ -50,8 +54,8 @@ func New(
 			return
 		}
 
-		projectId := r.URL.Query().Get("projectId")
-		if projectId == "" {
+		projectID := r.URL.Query().Get("projectId")
+		if projectID == "" {
 			log.Info("projectId is empty")
 
 			render.Status(r, http.StatusBadRequest)
@@ -61,7 +65,8 @@ func New(
 		}
 
 		if err := validator.New().Struct(req); err != nil {
-			validateErr := err.(validator.ValidationErrors)
+			var validateErr validator.ValidationErrors
+			errors.As(err, &validateErr)
 
 			log.Error("invalid request body", sl.Err(err))
 
@@ -71,9 +76,9 @@ func New(
 			return
 		}
 
-		log.Info("request body decoded", slog.Any("request body", req))
+		log.Info("request body decoded", slog.Any("request_body", req))
 
-		good, err := goodSaver.SaveGood(r.Context(), req.Name, projectId)
+		good, err := goodSaver.SaveGood(r.Context(), req.Name, projectID)
 		if err != nil {
 			log.Error("failed to save good", sl.Err(err))
 
@@ -99,8 +104,6 @@ func New(
 			log.Warn("failed to marshal data", sl.Err(err))
 		}
 
-		fmt.Println("producer: ", producer)
-		log.Debug("producer: ", producer)
 		err = producer.SendAsync(data)
 		if err != nil {
 			log.Warn("failed to send message to nats", sl.Err(err))

@@ -16,9 +16,17 @@ import (
 	"net/http"
 )
 
+const errCode = 3
+
 //go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
 type GoodUpdater interface {
-	UpdateGood(ctx context.Context, id string, projectId string, name string, desc string) (*models.Good, error)
+	UpdateGood(
+		ctx context.Context,
+		id string,
+		projectID string,
+		name string,
+		desc string,
+	) (*models.Good, error)
 	InvalidList(ctx context.Context) error
 }
 
@@ -41,7 +49,7 @@ func New(
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.update.New"
 
-		log := log.With(
+		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
@@ -58,7 +66,7 @@ func New(
 			return
 		}
 
-		log.Info("request body decoded", slog.Any("request body", req))
+		log.Info("request body decoded", slog.Any("request_body", req))
 
 		id := r.URL.Query().Get("id")
 		if id == "" {
@@ -70,8 +78,8 @@ func New(
 			return
 		}
 
-		projectId := r.URL.Query().Get("projectId")
-		if projectId == "" {
+		projectID := r.URL.Query().Get("projectId")
+		if projectID == "" {
 			log.Info("projectId is empty")
 
 			render.Status(r, http.StatusBadRequest)
@@ -81,7 +89,8 @@ func New(
 		}
 
 		if err := validator.New().Struct(req); err != nil {
-			validateErr := err.(validator.ValidationErrors)
+			var validateErr validator.ValidationErrors
+			errors.As(err, &validateErr)
 
 			log.Error("invalid request", sl.Err(err))
 
@@ -91,13 +100,13 @@ func New(
 			return
 		}
 
-		good, err := goodUpdater.UpdateGood(r.Context(), id, projectId, req.Name, req.Desc)
+		good, err := goodUpdater.UpdateGood(r.Context(), id, projectID, req.Name, req.Desc)
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Error("failed to delete good", sl.Err(err))
 
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, ErrorResponse{
-				Code:    3,
+				Code:    errCode,
 				Msg:     "errors.common.notFound",
 				Details: err.Error(),
 			})

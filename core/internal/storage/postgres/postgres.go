@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Gonnekone/hezzl-test/core/internal/config"
 	"github.com/Gonnekone/hezzl-test/core/internal/http-server/handlers/list"
-	"github.com/Gonnekone/hezzl-test/core/internal/http-server/handlers/reprioritize"
 	"github.com/Gonnekone/hezzl-test/core/internal/models"
 	"github.com/jackc/pgx/v5"
 )
@@ -32,7 +31,11 @@ func New(cfg config.PostgresStorage) (*PostgresStorage, error) {
 	return &PostgresStorage{db: conn, maxPriority: defaultPriority}, nil
 }
 
-func (s *PostgresStorage) SaveGood(ctx context.Context, name string, projectId string) (*models.Good, error) {
+func (s *PostgresStorage) SaveGood(
+	ctx context.Context,
+	name string,
+	projectID string,
+) (*models.Good, error) {
 	const op = "storage.postgres.SaveGood"
 
 	if s.maxPriority == defaultPriority {
@@ -51,7 +54,7 @@ func (s *PostgresStorage) SaveGood(ctx context.Context, name string, projectId s
 	`
 
 	var good models.Good
-	err := s.db.QueryRow(ctx, query, name, projectId, s.maxPriority).Scan(
+	err := s.db.QueryRow(ctx, query, name, projectID, s.maxPriority).Scan(
 		&good.ID,
 		&good.ProjectID,
 		&good.Name,
@@ -68,17 +71,25 @@ func (s *PostgresStorage) SaveGood(ctx context.Context, name string, projectId s
 	return &good, nil
 }
 
-func (s *PostgresStorage) UpdateGood(ctx context.Context, id string, projectId string, name string, desc string) (*models.Good, error) {
+func (s *PostgresStorage) UpdateGood(
+	ctx context.Context,
+	id string,
+	projectID string,
+	name string,
+	desc string,
+) (*models.Good, error) {
 	const op = "storage.postgres.UpdateGood"
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("%s: begin tx: %w", op, err)
 	}
+	//nolint: errcheck
 	defer tx.Rollback(ctx)
 
+	//nolint: goconst
 	lockQuery := `SELECT id FROM goods WHERE id = $1 AND project_id = $2 FOR UPDATE`
-	if _, err := tx.Exec(ctx, lockQuery, id, projectId); err != nil {
+	if _, err := tx.Exec(ctx, lockQuery, id, projectID); err != nil {
 		return nil, fmt.Errorf("%s: lock row: %w", op, err)
 	}
 
@@ -93,7 +104,7 @@ func (s *PostgresStorage) UpdateGood(ctx context.Context, id string, projectId s
 	}
 
 	query += fmt.Sprintf(" WHERE id = $%d AND project_id = $%d", argIdx, argIdx+1)
-	args = append(args, id, projectId)
+	args = append(args, id, projectID)
 
 	query += ` RETURNING id, project_id, name, description, priority, removed, created_at`
 
@@ -118,41 +129,72 @@ func (s *PostgresStorage) UpdateGood(ctx context.Context, id string, projectId s
 	return &res, nil
 }
 
-func (s *PostgresStorage) UpdateGoodsPriority(ctx context.Context, id string, projectId string, priority int) ([]reprioritize.GoodPriorityView, error) {
+func (s *PostgresStorage) UpdateGoodsPriority(
+	ctx context.Context,
+	id string,
+	projectID string,
+	priority int,
+) ([]models.Good, error) {
 	const op = "storage.postgres.UpdateGoodsPriority"
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("%s: begin tx: %w", op, err)
 	}
+	//nolint: errcheck
 	defer tx.Rollback(ctx)
 
+	//nolint: goconst
 	lockQuery := `SELECT id FROM goods WHERE id = $1 AND project_id = $2 FOR UPDATE`
-	if _, err := tx.Exec(ctx, lockQuery, id, projectId); err != nil {
+	if _, err := tx.Exec(ctx, lockQuery, id, projectID); err != nil {
 		return nil, fmt.Errorf("%s: lock row: %w", op, err)
 	}
 
-	_, err = tx.Exec(ctx, `UPDATE goods SET priority = $1 WHERE id = $2 AND project_id = $3`, priority, id, projectId)
+	query := `
+		UPDATE goods SET priority = $1 WHERE id = $2 AND project_id = $3
+		RETURNING id, project_id, name, description, priority, removed, created_at
+	`
+
+	var good models.Good
+	err = tx.QueryRow(ctx, query, priority, id, projectID).Scan(
+		&good.ID,
+		&good.ProjectID,
+		&good.Name,
+		&good.Description,
+		&good.Priority,
+		&good.Removed,
+		&good.CreatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("%s: update current: %w", op, err)
 	}
 
-	query := `
+	var res []models.Good
+	res = append(res, good)
+
+	query = `
 		UPDATE goods
 		SET priority = priority + 1
-		WHERE priority >= $1 AND id != $2 AND project_id = $3
-		RETURNING id, priority
+		WHERE priority >= $1 AND id != $2 AND project_id = $3 AND removed = false
+		RETURNING id, project_id, name, description, priority, removed, created_at
 	`
 
-	rows, err := tx.Query(ctx, query, priority, id, projectId)
+	rows, err := tx.Query(ctx, query, priority, id, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("%s: reprioritize: %w", op, err)
 	}
 
-	var res []reprioritize.GoodPriorityView
 	for rows.Next() {
-		var g reprioritize.GoodPriorityView
-		if err := rows.Scan(&g.Id, &g.Priority); err != nil {
+		var g models.Good
+		if err := rows.Scan(
+			&g.ID,
+			&g.ProjectID,
+			&g.Name,
+			&g.Description,
+			&g.Priority,
+			&g.Removed,
+			&g.CreatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("%s: scan reprioritized: %w", op, err)
 		}
 		res = append(res, g)
@@ -171,17 +213,23 @@ func (s *PostgresStorage) UpdateGoodsPriority(ctx context.Context, id string, pr
 	return res, nil
 }
 
-func (s *PostgresStorage) DeleteGood(ctx context.Context, id string, projectId string) (*models.Good, error) {
+func (s *PostgresStorage) DeleteGood(
+	ctx context.Context,
+	id string,
+	projectID string,
+) (*models.Good, error) {
 	const op = "storage.postgres.DeleteGood"
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("%s: begin tx: %w", op, err)
 	}
+	//nolint: errcheck
 	defer tx.Rollback(ctx)
 
+	//nolint: goconst
 	lockQuery := `SELECT id FROM goods WHERE id = $1 AND project_id = $2 FOR UPDATE`
-	if _, err := tx.Exec(ctx, lockQuery, id, projectId); err != nil {
+	if _, err := tx.Exec(ctx, lockQuery, id, projectID); err != nil {
 		return nil, fmt.Errorf("%s: lock row: %w", op, err)
 	}
 
@@ -193,7 +241,7 @@ func (s *PostgresStorage) DeleteGood(ctx context.Context, id string, projectId s
 	`
 
 	var good models.Good
-	err = s.db.QueryRow(ctx, query, id, projectId).Scan(
+	err = s.db.QueryRow(ctx, query, id, projectID).Scan(
 		&good.ID,
 		&good.ProjectID,
 		&good.Name,
@@ -213,7 +261,11 @@ func (s *PostgresStorage) DeleteGood(ctx context.Context, id string, projectId s
 	return &good, nil
 }
 
-func (s *PostgresStorage) ListGoods(ctx context.Context, limit int, offset int) (*list.GoodListResponse, error) {
+func (s *PostgresStorage) ListGoods(
+	ctx context.Context,
+	limit int,
+	offset int,
+) (*list.GoodListResponse, error) {
 	const op = "storage.postgres.ListGoods"
 
 	query := `
@@ -262,7 +314,11 @@ func (s *PostgresStorage) ListGoods(ctx context.Context, limit int, offset int) 
 	return &res, nil
 }
 
-func (s *PostgresStorage) GetGood(ctx context.Context, id string, projectId string) (*models.Good, error) {
+func (s *PostgresStorage) GetGood(
+	ctx context.Context,
+	id string,
+	projectID string,
+) (*models.Good, error) {
 	const op = "storage.postgres.GetGood"
 
 	query := `
@@ -271,7 +327,7 @@ func (s *PostgresStorage) GetGood(ctx context.Context, id string, projectId stri
 	`
 
 	var good models.Good
-	if err := s.db.QueryRow(ctx, query, id, projectId).Scan(
+	if err := s.db.QueryRow(ctx, query, id, projectID).Scan(
 		&good.ID,
 		&good.ProjectID,
 		&good.Name,

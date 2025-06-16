@@ -3,6 +3,7 @@ package producer
 import (
 	"fmt"
 	"github.com/Gonnekone/hezzl-test/core/internal/config"
+	"github.com/Gonnekone/hezzl-test/core/internal/lib/logger/sl"
 	"github.com/nats-io/nats.go"
 	"log/slog"
 )
@@ -51,14 +52,18 @@ func (p *Producer) Close() {
 func (p *Producer) Send(data []byte) error {
 	ack, err := p.js.Publish(p.cfg.Subject, data)
 	if err != nil {
-		p.log.Error("failed to publish message", "error", err, "subject", p.cfg.Subject)
+		p.log.Error("failed to publish message",
+			sl.Err(err),
+			slog.String("subject", p.cfg.Subject),
+		)
 		return fmt.Errorf("publish message to %s: %w", p.cfg.Subject, err)
 	}
 
 	p.log.Debug("message published",
-		"subject", p.cfg.Subject,
-		"stream", ack.Stream,
-		"sequence", ack.Sequence)
+		slog.String("subject", p.cfg.Subject),
+		slog.String("string", ack.Stream),
+		slog.Uint64("seq", ack.Sequence),
+	)
 
 	return nil
 }
@@ -66,10 +71,13 @@ func (p *Producer) Send(data []byte) error {
 func (p *Producer) SendAsync(data []byte) error {
 	_, err := p.js.PublishAsync(p.cfg.Subject, data)
 	if err != nil {
-		p.log.Error("failed to publish async message", "error", err, "subject", p.cfg.Subject)
+		p.log.Error("failed to publish async message",
+			sl.Err(err),
+			slog.String("subject", p.cfg.Subject),
+		)
 		return fmt.Errorf("publish async message to %s: %w", p.cfg.Subject, err)
 	}
 
-	p.log.Debug("async message published", "subject", p.cfg.Subject)
+	p.log.Debug("async message published", slog.String("subject", p.cfg.Subject))
 	return nil
 }

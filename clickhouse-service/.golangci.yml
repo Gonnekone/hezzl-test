@@ -13,13 +13,12 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
+    - copyloopvar
     - forbidigo
     - gochecknoinits
     - goconst
-    - gocritic
-    - goerr113
-    - gomnd
+    - err113
+    - mnd
     - gomoddirectives
     - goprintffuncname
     - gosec
@@ -30,7 +29,6 @@ linters:
     - misspell
     - nilerr
     - noctx
-    - nolintlint
     - nonamedreturns
     - prealloc
     - predeclared

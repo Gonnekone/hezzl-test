@@ -16,20 +16,26 @@ import (
 	"net/http"
 )
 
+const errCode = 3
+
 //go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
 type GoodPriorityUpdater interface {
-	UpdateGoodsPriority(ctx context.Context, id string, projectId string, priority int) ([]GoodPriorityView, error)
+	UpdateGoodsPriority(
+		ctx context.Context,
+		id string,
+		projectID string,
+		priority int,
+	) ([]models.Good, error)
 	InvalidList(ctx context.Context) error
-	GetGood(ctx context.Context, id string, projectId string) (*models.Good, error)
 }
 
 type GoodPriorityView struct {
-	Id       int `json:"id"`
+	ID       int `json:"id"`
 	Priority int `json:"priority"`
 }
 
 type Request struct {
-	NewPriority int `json:"newPriority"`
+	NewPriority int `json:"newPriority" validate:"required"`
 }
 
 type Response struct {
@@ -50,7 +56,7 @@ func New(
 	return func(w http.ResponseWriter, r *http.Request) {
 		const op = "handlers.reprioritize.New"
 
-		log := log.With(
+		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
@@ -67,7 +73,7 @@ func New(
 			return
 		}
 
-		log.Info("request body decoded", slog.Any("request body", req))
+		log.Info("request body decoded", slog.Any("request_body", req))
 
 		id := r.URL.Query().Get("id")
 		if id == "" {
@@ -79,8 +85,8 @@ func New(
 			return
 		}
 
-		projectId := r.URL.Query().Get("projectId")
-		if projectId == "" {
+		projectID := r.URL.Query().Get("projectId")
+		if projectID == "" {
 			log.Info("projectId is empty")
 
 			render.Status(r, http.StatusBadRequest)
@@ -90,7 +96,8 @@ func New(
 		}
 
 		if err := validator.New().Struct(req); err != nil {
-			validateErr := err.(validator.ValidationErrors)
+			var validateErr validator.ValidationErrors
+			errors.As(err, &validateErr)
 
 			log.Error("invalid request", sl.Err(err))
 
@@ -100,13 +107,18 @@ func New(
 			return
 		}
 
-		goodsPriority, err := goodPriorityUpdater.UpdateGoodsPriority(r.Context(), id, projectId, req.NewPriority)
+		goods, err := goodPriorityUpdater.UpdateGoodsPriority(
+			r.Context(),
+			id,
+			projectID,
+			req.NewPriority,
+		)
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Error("failed to delete good", sl.Err(err))
 
 			render.Status(r, http.StatusNotFound)
 			render.JSON(w, r, ErrorResponse{
-				Code:    3,
+				Code:    errCode,
 				Msg:     "errors.common.notFound",
 				Details: err.Error(),
 			})
@@ -134,26 +146,26 @@ func New(
 
 		log.Info("priority updated successfully")
 
-		// Можно возвращать все измененные товары, но тогда это уже не логи будут,
-		// а копия хранилища, не вижу в этом смысла. Да там будут неверные приоритеты,
-		// но зачем там вообще все данные о товарах, почему не создать евент логи
-		// что товар был создан - изменен - удален... Без конкретики.
-		good, err := goodPriorityUpdater.GetGood(r.Context(), id, projectId)
-		if err != nil {
-			log.Warn("failed to get good", sl.Err(err))
+		goodsPriority := make([]GoodPriorityView, 0, len(goods))
+
+		for _, good := range goods {
+			data, err := json.Marshal(good)
+			if err != nil {
+				log.Warn("failed to marshal data", sl.Err(err))
+			}
+
+			// почему не сделать просто eventlogs?
+			err = producer.SendAsync(data)
+			if err != nil {
+				log.Warn("failed to send message to nats", sl.Err(err))
+			}
+
+			goodsPriority = append(goodsPriority, GoodPriorityView{
+				ID:       good.ID,
+				Priority: good.Priority,
+			})
 		}
 
-		data, err := json.Marshal(good)
-		if err != nil {
-			log.Warn("failed to marshal data", sl.Err(err))
-		}
-
-		err = producer.SendAsync(data)
-		if err != nil {
-			log.Warn("failed to send message to nats", sl.Err(err))
-		}
-
-		// здесь мы еще раз маршаллим, по хорошему просто передавать []byte
 		render.JSON(w, r, Response{Priorities: goodsPriority})
 	}
 }

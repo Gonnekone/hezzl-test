@@ -5,14 +5,18 @@ import (
 	"flag"
 	"fmt"
 	"github.com/Gonnekone/hezzl-test/core/internal/config"
+	"github.com/Gonnekone/hezzl-test/core/internal/lib/logger/sl"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"log"
+	"log/slog"
+	"os"
 )
 
 func main() {
 	var migrationsPath, direction string
+
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	flag.StringVar(&migrationsPath, "migrations-path", "", "path to migrations")
 	flag.StringVar(&direction, "direction", "up", "migration direction (up/down)")
@@ -20,7 +24,8 @@ func main() {
 	cfg := config.MustLoad()
 
 	if migrationsPath == "" {
-		log.Fatal("migrations-path is required")
+		log.Error("migrations-path is required")
+		os.Exit(1)
 	}
 
 	if cfg.PostgresStorage.Host == "postgres" {
@@ -29,8 +34,15 @@ func main() {
 
 	m, err := migrate.New("file://"+migrationsPath, cfg.PostgresStorage.DSN()+"?sslmode=disable")
 	if err != nil {
-		fmt.Println("file://"+migrationsPath, cfg.PostgresStorage.DSN()+"?sslmode=disable")
-		log.Fatal(err)
+		msg := fmt.Sprintf("file://%s %s?sslmode=disable",
+			migrationsPath,
+			cfg.PostgresStorage.DSN(),
+		)
+
+		//nolint: sloglint
+		log.Debug(msg)
+		log.Error("failed to create migrate instance", sl.Err(err))
+		os.Exit(1)
 	}
 
 	switch direction {
@@ -42,12 +54,13 @@ func main() {
 	}
 	if err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
-			fmt.Println("no changes to apply")
+			log.Info("no changes to apply")
 
 			return
 		}
-		log.Fatal(err)
+		log.Error("failed to apply migrations", sl.Err(err))
+		os.Exit(1)
 	}
 
-	fmt.Println("migrations applied successfully")
+	log.Info("migrations applied successfully")
 }

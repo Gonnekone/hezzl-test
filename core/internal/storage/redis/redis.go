@@ -39,7 +39,10 @@ func New(cfg config.RedisStorage) (*RedisStorage, error) {
 	return &RedisStorage{client: rdb}, nil
 }
 
-func (s *RedisStorage) SaveListInCache(ctx context.Context, list list.GoodListResponse) error {
+func (s *RedisStorage) SaveListInCache(
+	ctx context.Context,
+	list list.GoodListResponse,
+) error {
 	const op = "storage.redis.SaveList"
 
 	key := fmt.Sprintf("limit:%d-offset:%d", list.Meta.Limit, list.Meta.Offset)
@@ -57,7 +60,10 @@ func (s *RedisStorage) SaveListInCache(ctx context.Context, list list.GoodListRe
 	return nil
 }
 
-func (s *RedisStorage) GetCachedList(ctx context.Context, limit, offset int) ([]byte, error) {
+func (s *RedisStorage) GetCachedList(
+	ctx context.Context,
+	limit, offset int,
+) ([]byte, error) {
 	const op = "storage.redis.GetList"
 
 	key := fmt.Sprintf("limit:%d-offset:%d", limit, offset)
@@ -65,7 +71,9 @@ func (s *RedisStorage) GetCachedList(ctx context.Context, limit, offset int) ([]
 	data, err := s.client.Get(ctx, key).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return nil, fmt.Errorf("%s: no data found for limit %d and offset %d", op, limit, offset)
+			//nolint: err113
+			return nil, fmt.Errorf("%s: no data found for limit %d and offset %d",
+				op, limit, offset)
 		}
 		return nil, fmt.Errorf("%s: failed to get list from redis: %w", op, err)
 	}
