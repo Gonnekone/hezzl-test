@@ -62,7 +62,6 @@ func (l *Listener) Close() {
 }
 
 func (l *Listener) Start(ctx context.Context) error {
-	// Создаем consumer
 	_, err := l.js.AddConsumer(l.cfg.StreamName, &nats.ConsumerConfig{
 		Durable:       l.cfg.ConsumerName,
 		DeliverPolicy: nats.DeliverNewPolicy,
@@ -74,7 +73,6 @@ func (l *Listener) Start(ctx context.Context) error {
 		return fmt.Errorf("create consumer: %w", err)
 	}
 
-	// Подписываемся на сообщения
 	sub, err := l.js.PullSubscribe(l.cfg.Subject, l.cfg.ConsumerName)
 	if err != nil {
 		return fmt.Errorf("subscribe: %w", err)
@@ -85,10 +83,8 @@ func (l *Listener) Start(ctx context.Context) error {
 		slog.String("subject", l.cfg.Subject),
 		slog.Int("batch_size", l.cfg.BatchSize))
 
-	// Запускаем batch processor в отдельной горутине
 	go l.batchProcessor(ctx)
 
-	// Основной цикл обработки сообщений
 	go l.listen(ctx, sub)
 
 	return nil
@@ -101,7 +97,6 @@ func (l *Listener) listen(ctx context.Context, sub *nats.Subscription) {
 		select {
 		case <-ctx.Done():
 			l.log.Debug("Shutting down listener...")
-			// Отправляем оставшиеся сообщения
 			l.flushBatch(ctx)
 			return
 		default:
@@ -115,16 +110,14 @@ func (l *Listener) listen(ctx context.Context, sub *nats.Subscription) {
 				continue
 			}
 
-			// Обрабатываем сообщения
 			processedMsgs := make([]*nats.Msg, 0, len(msgs))
 			for _, msg := range msgs {
 				good, err := l.processMessage(msg)
 				if err != nil {
 					l.log.Warn("Error processing message", sl.Err(err))
-					continue // Не ACK'аем при ошибке
+					continue
 				}
 
-				// Отправляем в batch processor
 				select {
 				case l.batchCh <- *good:
 					processedMsgs = append(processedMsgs, msg)
@@ -145,7 +138,6 @@ func (l *Listener) listen(ctx context.Context, sub *nats.Subscription) {
 	}
 }
 
-// Обработка сообщения и маршалинг в models.Good
 func (l *Listener) processMessage(msg *nats.Msg) (*models.Good, error) {
 	l.log.Debug("Processing message", slog.String("data", string(msg.Data)))
 
@@ -170,19 +162,17 @@ func (l *Listener) batchProcessor(ctx context.Context) {
 
 		case good, ok := <-l.batchCh:
 			if !ok {
-				return // Канал закрыт
+				return
 			}
 
 			l.goodsBatch = append(l.goodsBatch, good)
 
-			// Если batch заполнен - отправляем
 			if len(l.goodsBatch) >= l.cfg.BatchSize {
 				l.flushBatch(ctx)
 				timer.Reset(l.batchTimer)
 			}
 
 		case <-timer.C:
-			// Отправляем по таймауту, даже если batch не полный
 			if len(l.goodsBatch) > 0 {
 				l.flushBatch(ctx)
 			}
@@ -191,7 +181,6 @@ func (l *Listener) batchProcessor(ctx context.Context) {
 	}
 }
 
-// Отправка накопленного batch в ClickHouse
 func (l *Listener) flushBatch(ctx context.Context) {
 	if len(l.goodsBatch) == 0 {
 		return
@@ -206,13 +195,11 @@ func (l *Listener) flushBatch(ctx context.Context) {
 			sl.Err(err),
 			slog.Int("batch_size", len(l.goodsBatch)),
 			slog.Duration("duration", duration))
-		// В production здесь можно добавить retry логику или dead letter queue
 	} else {
 		l.log.Info("Successfully flushed batch to ClickHouse",
 			slog.Int("batch_size", len(l.goodsBatch)),
 			slog.Duration("duration", duration))
 	}
 
-	// Очищаем batch
 	l.goodsBatch = l.goodsBatch[:0]
 }
