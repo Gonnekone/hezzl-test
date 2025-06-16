@@ -15,7 +15,7 @@ import (
 const limitDefault = "10"
 const offsetDefault = "1"
 
-//go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
+//go:generate go run github.com/vektra/mockery/v3@v3.4.0 --name=GoodLister
 type GoodLister interface {
 	ListGoods(
 		ctx context.Context,

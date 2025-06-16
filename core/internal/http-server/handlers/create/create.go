@@ -15,7 +15,7 @@ import (
 	"net/http"
 )
 
-//go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
+//go:generate mockgen -source=create.go -destination=mocks/GoodSaver.go -package=mocks
 type GoodSaver interface {
 	SaveGood(
 		ctx context.Context,
@@ -93,6 +93,7 @@ func New(
 			log.Error("failed to invalid cached list", sl.Err(err))
 
 			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, resp.Error("failed to invalid cached list"))
 
 			return
 		}

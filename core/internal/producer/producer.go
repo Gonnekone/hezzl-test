@@ -8,6 +8,7 @@ import (
 	"log/slog"
 )
 
+//go:generate mockgen -source=producer.go -destination=mocks/producer.go -package=mocks
 type ProducerInterface interface {
 	Send(data []byte) error
 	SendAsync(data []byte) error

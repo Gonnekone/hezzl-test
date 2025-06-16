@@ -18,7 +18,7 @@ import (
 
 const errCode = 3
 
-//go:generate go run github.com/vektra/mockery/v2@v2.42.1 --name=URLSaver
+//go:generate go run github.com/vektra/mockery/v3@v3.4.0 --name=GoodUpdater
 type GoodUpdater interface {
 	UpdateGood(
 		ctx context.Context,

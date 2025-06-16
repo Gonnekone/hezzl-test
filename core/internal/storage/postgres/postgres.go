@@ -175,7 +175,7 @@ func (s *PostgresStorage) UpdateGoodsPriority(
 	query = `
 		UPDATE goods
 		SET priority = priority + 1
-		WHERE priority >= $1 AND id != $2 AND project_id = $3 AND removed = false
+		WHERE priority >= $1 AND id != $2 AND project_id = $3
 		RETURNING id, project_id, name, description, priority, removed, created_at
 	`
 
